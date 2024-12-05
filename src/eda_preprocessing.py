@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
+from sklearn.utils import resample
+import pandas as pd
 
 def explore_class_distribution(data, dataset_name):
     """Explore class distribution."""
@@ -88,3 +90,25 @@ def create_nested_splits(data, sizes, random_state=42):
         print(f"Created split: {int(size * 100)}% with {sample_size} samples.")
     
     return nested_splits
+
+def balance_dataset_undersample(data, label_col="label"):
+    """
+    Balances the dataset by undersampling the majority class.
+    """
+    # Separate majority and minority classes
+    majority_class = data[data[label_col] == data[label_col].value_counts().idxmax()]
+    minority_class = data[data[label_col] == data[label_col].value_counts().idxmin()]
+
+    # Undersample majority class
+    majority_class_downsampled = resample(
+        majority_class,
+        replace=False,  # No replacement
+        n_samples=len(minority_class),  # Match minority class size
+        random_state=42  # Reproducibility
+    )
+
+    # Combine minority class with undersampled majority class
+    balanced_data = pd.concat([minority_class, majority_class_downsampled])
+
+    print(f"Class distribution after undersampling:\n{balanced_data[label_col].value_counts()}")
+    return balanced_data
