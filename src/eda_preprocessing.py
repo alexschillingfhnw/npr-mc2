@@ -9,7 +9,7 @@ def explore_class_distribution(data, dataset_name):
     for label, count in class_counts.items():
         print(f"Label {label}: {count} samples")
 
-    plt.figure(figsize=(8, 5))
+    plt.figure(figsize=(6, 4))
     sns.barplot(x=list(class_counts.keys()), y=list(class_counts.values()))
     plt.title(f"Class Distribution in {dataset_name}")
     plt.xlabel("Class")
