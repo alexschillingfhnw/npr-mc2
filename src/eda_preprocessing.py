@@ -3,6 +3,19 @@ import seaborn as sns
 from collections import Counter
 from sklearn.utils import resample
 import pandas as pd
+from wordcloud import WordCloud
+from nltk.corpus import stopwords
+import string
+import nltk
+import re
+
+# Download stopwords if not already present
+nltk.download("stopwords")
+
+# Define custom stop words
+custom_stop_words = {"'s", "n't", "--", "...", "''", "``", "'re", "'ve"}
+stop_words = set(stopwords.words("english")).union(custom_stop_words)
+
 
 def explore_class_distribution(data, dataset_name):
     """Explore class distribution."""
@@ -55,6 +68,55 @@ def plot_token_length_distribution(token_lengths, dataset_name):
     plt.title(f"Token Length Distribution in {dataset_name}")
     plt.xlabel("Token Length")
     plt.ylabel("Frequency")
+    plt.show()
+
+def plot_word_cloud(data, sentiment_label, title):
+    text = " ".join(data[data['label'] == sentiment_label]['sentence'])
+    wordcloud = WordCloud(width=800, height=400, background_color="white").generate(text)
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation="bilinear")
+    plt.axis("off")
+    plt.title(title)
+    plt.show()
+
+def analyze_vocabulary(data):
+    """
+    Tokenizes text, removes stop words, punctuation, and non-alphanumeric tokens,
+    and counts word frequencies.
+    """
+    # Initialize Counter
+    word_counts = Counter()
+
+    # Process each sentence
+    for sentence in data["sentence"]:
+        # Tokenize and clean words
+        words = [
+            word.lower()
+            for word in re.findall(r"\b\w+\b", sentence)  # Keep only alphanumeric words
+            if word.lower() not in stop_words  # Remove stop words
+        ]
+        word_counts.update(words)
+
+    vocab_size = len(word_counts)
+    print(f"Vocabulary size after advanced filtering: {vocab_size}")
+    common_words = word_counts.most_common(10)
+    print("Top 10 common words:", common_words)
+    return word_counts
+
+def plot_word_frequency(word_counts, top_n=20):
+    """
+    Plots the most frequent words in the dataset using a bar plot.
+    """
+    common_words = word_counts.most_common(top_n)
+    words, counts = zip(*common_words)
+    words = list(words)
+    counts = list(counts)
+    
+    plt.figure(figsize=(12, 6))
+    sns.barplot(x=counts, y=words, orient="h")
+    plt.title("Top Word Frequencies (Excluding Stop Words and Punctuation)")
+    plt.xlabel("Frequency")
+    plt.ylabel("Words")
     plt.show()
 
 def calculate_token_lengths(data, tokenizer, dataset_name):
