@@ -1,4 +1,5 @@
 from datasets import Dataset
+from sentence_transformers import SentenceTransformer
 from transformers import (
     BertForSequenceClassification,
     BertTokenizer,
@@ -9,11 +10,17 @@ from transformers import (
     get_scheduler,
 )
 import torch
-from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+
+import os
 import time
 import numpy as np
+from umap import UMAP
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
+
+from sklearn.metrics import precision_recall_fscore_support, accuracy_score
+from sklearn.metrics.pairwise import cosine_similarity, cosine_distances
+from sklearn.manifold import TSNE
 
 
 def get_device():
@@ -148,9 +155,6 @@ class TimeRemainingCallback(TrainerCallback):
             )
 
 
-# ====================
-# Moving Average for Smoothing
-# ====================
 def moving_average(data, window_size=3):
     return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
 
@@ -226,8 +230,147 @@ def evaluate_model(trainer, test_ds):
 
 
 # ====================
+# Generate Embeddings
+# ====================
+def generate_embeddings(sentences, model_name="all-MiniLM-L6-v2", device="cpu"):
+    """
+    Generate embeddings for a list of sentences using a sentence-transformer model.
+
+    Args:
+        sentences (list): List of sentences to embed.
+        model_name (str): Pretrained sentence-transformer model.
+
+    Returns:
+        np.ndarray: Sentence embeddings.
+    """
+    model = SentenceTransformer(model_name).to(device)
+    embeddings = model.encode(sentences, show_progress_bar=True)
+    return embeddings
+
+
+def calculate_similarity(embeddings, reference_index=0):
+    """
+    Calculate cosine similarity of embeddings with respect to a reference embedding.
+
+    Args:
+        embeddings (np.ndarray): Sentence embeddings.
+        reference_index (int): Index of the reference embedding for similarity calculation.
+
+    Returns:
+        np.ndarray: Cosine similarity scores.
+    """
+    reference_embedding = embeddings[reference_index].reshape(1, -1)
+    similarities = cosine_similarity(reference_embedding, embeddings)
+    return similarities.flatten()
+
+
+def print_most_similar_sentences(embeddings, sentences, reference_index, top_k=5):
+    """
+    Print the top-k most similar sentences to a reference sentence.
+    """
+    similarities = calculate_similarity(embeddings, reference_index=reference_index)
+
+    # Display top-5 most similar sentences
+    sorted_indices = np.argsort(-similarities)  # Sort in descending order
+    print("Top-5 most similar sentences:")
+    for idx in sorted_indices[:5]:
+        print(f"Similarity: {similarities[idx]:.4f}, Sentence: {sentences[idx]}")
+
+
+def get_min_max_distance(embeddings, sentences):
+    # Calculate pairwise cosine distances
+    distances = cosine_distances(embeddings)
+
+    # Find the sentence with the furthest distance to any other sentence
+    max_distance_idx = np.unravel_index(np.argmax(distances, axis=None), distances.shape)
+    max_distance_sentence_idx = max_distance_idx[0]
+
+    # Find the sentence closest to the most others (minimum average distance)
+    average_distances = distances.mean(axis=1)
+    min_average_distance_idx = np.argmin(average_distances)
+
+    # Results
+    max_distance_sentence = sentences[max_distance_sentence_idx]
+    min_average_distance_sentence = sentences[min_average_distance_idx]
+
+    print(f"Sentence with the furthest distance to any other sentence:\n'{max_distance_sentence}'")
+    print()
+    print(f"Sentence closest to the most others (minimum average distance):\n'{min_average_distance_sentence}'")
+
+
+# ====================
 # Plots
 # ====================
+def visualize_embeddings(embeddings, labels=None, title="Embedding Visualization"):
+    """
+    Visualize sentence embeddings using t-SNE.
+
+    Args:
+        embeddings (np.ndarray): Sentence embeddings.
+        labels (list): Optional labels for coloring the points.
+        title (str): Title of the plot.
+    """
+
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    print("Reducing dimensionality with t-SNE...")
+    tsne = TSNE(n_components=2, random_state=42)
+    reduced_embeddings = tsne.fit_transform(embeddings)
+
+    plt.figure(figsize=(8, 6))
+    if labels is not None:
+        unique_labels = np.unique(labels)
+        for label in unique_labels:
+            indices = [i for i, lbl in enumerate(labels) if lbl == label]
+            plt.scatter(
+                reduced_embeddings[indices, 0],
+                reduced_embeddings[indices, 1],
+                label=str(label),
+                alpha=0.7,
+            )
+        plt.legend()
+    else:
+        plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], alpha=0.7)
+    plt.title(title)
+    plt.xlabel("t-SNE Dimension 1")
+    plt.ylabel("t-SNE Dimension 2")
+    plt.grid(True)
+    plt.show()
+
+def visualize_with_umap(embeddings, labels=None, title="UMAP Embedding Visualization"):
+    """
+    Visualize sentence embeddings using UMAP.
+    
+    Args:
+        embeddings (np.ndarray): Sentence embeddings.
+        labels (list or None): Optional labels for coloring points.
+        title (str): Plot title.
+    """
+    print("Reducing dimensionality with UMAP...")
+    umap_reducer = UMAP(n_components=2, random_state=42)
+    reduced_embeddings = umap_reducer.fit_transform(embeddings)
+    
+    plt.figure(figsize=(10, 8))
+    if labels is not None:
+        unique_labels = np.unique(labels)
+        for label in unique_labels:
+            indices = [i for i, lbl in enumerate(labels) if lbl == label]
+            plt.scatter(
+                reduced_embeddings[indices, 0],
+                reduced_embeddings[indices, 1],
+                label=str(label),
+                alpha=0.7
+            )
+        plt.legend()
+    else:
+        plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], alpha=0.7)
+    plt.title(title)
+    plt.xlabel("UMAP Dimension 1")
+    plt.ylabel("UMAP Dimension 2")
+    plt.grid(True)
+    plt.show()
+
+
 def plot_metrics(metrics_df, x_col="split_size", y_cols=None, title="Model Quality by Training Data Size"):
     """
     Plot specified metrics against training data split size.
