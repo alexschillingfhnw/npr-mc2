@@ -264,9 +264,9 @@ def calculate_similarity(embeddings, reference_index=0):
     return similarities.flatten()
 
 
-def print_most_similar_sentences(embeddings, sentences, reference_index, top_k=5):
+def get_and_print_most_similar_sentences(embeddings, sentences, reference_index, top_k=5):
     """
-    Print the top-k most similar sentences to a reference sentence.
+    Print the top-k most similar sentences to a reference sentence and also return their embeddings for visualization.
     """
     similarities = calculate_similarity(embeddings, reference_index=reference_index)
 
@@ -275,6 +275,10 @@ def print_most_similar_sentences(embeddings, sentences, reference_index, top_k=5
     print("Top-5 most similar sentences:")
     for idx in sorted_indices[:5]:
         print(f"Similarity: {similarities[idx]:.4f}, Sentence: {sentences[idx]}")
+
+    # Get embeddings of the top-k most similar sentences
+    top_k_embeddings = embeddings[sorted_indices[:top_k]]
+    return top_k_embeddings
 
 
 def get_min_max_distance(embeddings, sentences):
@@ -301,72 +305,55 @@ def get_min_max_distance(embeddings, sentences):
 # ====================
 # Plots
 # ====================
-def visualize_embeddings(embeddings, labels=None, title="Embedding Visualization"):
+def visualize_embeddings(embeddings, labels=None, title="Embedding Visualization", method="tsne"):
     """
-    Visualize sentence embeddings using t-SNE.
+    Visualize sentence embeddings using t-SNE or UMAP.
 
     Args:
         embeddings (np.ndarray): Sentence embeddings.
-        labels (list): Optional labels for coloring the points.
+        labels (list or np.ndarray): Optional labels for coloring the points.
         title (str): Title of the plot.
+        method (str): Dimensionality reduction method, either 'tsne' or 'umap'.
     """
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    print("Reducing dimensionality with t-SNE...")
-    tsne = TSNE(n_components=2, random_state=42)
-    reduced_embeddings = tsne.fit_transform(embeddings)
-
-    plt.figure(figsize=(8, 6))
-    if labels is not None:
-        unique_labels = np.unique(labels)
-        for label in unique_labels:
-            indices = [i for i, lbl in enumerate(labels) if lbl == label]
-            plt.scatter(
-                reduced_embeddings[indices, 0],
-                reduced_embeddings[indices, 1],
-                label=str(label),
-                alpha=0.7,
-            )
-        plt.legend()
+    # Reduce dimensionality
+    print(f"Reducing dimensionality with {method.upper()}...")
+    if method.lower() == "tsne":
+        reducer = TSNE(n_components=2, random_state=42)
+    elif method.lower() == "umap":
+        reducer = UMAP(n_components=2, random_state=42)
     else:
-        plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], alpha=0.7)
-    plt.title(title)
-    plt.xlabel("t-SNE Dimension 1")
-    plt.ylabel("t-SNE Dimension 2")
-    plt.grid(True)
-    plt.show()
+        raise ValueError("Invalid method. Choose 'tsne' or 'umap'.")
+    
+    reduced_embeddings = reducer.fit_transform(embeddings)
 
-def visualize_with_umap(embeddings, labels=None, title="UMAP Embedding Visualization"):
-    """
-    Visualize sentence embeddings using UMAP.
-    
-    Args:
-        embeddings (np.ndarray): Sentence embeddings.
-        labels (list or None): Optional labels for coloring points.
-        title (str): Plot title.
-    """
-    print("Reducing dimensionality with UMAP...")
-    umap_reducer = UMAP(n_components=2, random_state=42)
-    reduced_embeddings = umap_reducer.fit_transform(embeddings)
-    
+    # Plotting
     plt.figure(figsize=(10, 8))
+
     if labels is not None:
+        # Define harmonious colors
         unique_labels = np.unique(labels)
-        for label in unique_labels:
-            indices = [i for i, lbl in enumerate(labels) if lbl == label]
+        colors = ['#2E86AB', '#FF6F61', '#6CC644']  # Blue, Coral, and Green
+
+        for i, label in enumerate(unique_labels):
+            indices = np.where(labels == label)[0]
             plt.scatter(
                 reduced_embeddings[indices, 0],
                 reduced_embeddings[indices, 1],
-                label=str(label),
-                alpha=0.7
+                label=f"Label {label}",
+                color=colors[i % len(colors)],
+                alpha=0.4,
             )
-        plt.legend()
+
+        plt.legend(title="Labels", loc="best")
     else:
-        plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], alpha=0.7)
+        plt.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], alpha=0.4)
+
     plt.title(title)
-    plt.xlabel("UMAP Dimension 1")
-    plt.ylabel("UMAP Dimension 2")
+    plt.xlabel(f"{method.upper()} Dimension 1")
+    plt.ylabel(f"{method.upper()} Dimension 2")
     plt.grid(True)
     plt.show()
 
