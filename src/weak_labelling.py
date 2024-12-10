@@ -72,7 +72,7 @@ def approximate_nearest_neighbors(embeddings_labeled, embeddings_unlabeled, k=5)
 
 
 def evaluate_and_compare_techniques(
-    embeddings_labeled, labels_labeled, embeddings_unlabeled, validation_labels, embeddings_validation, k=5
+    embeddings_labeled, labels_labeled, validation_labels, embeddings_validation, k=5
 ):
     """
     Apply and evaluate multiple weak labeling techniques using the validation set with ground truth.
