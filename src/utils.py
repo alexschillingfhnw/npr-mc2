@@ -15,6 +15,7 @@ import os
 import time
 import numpy as np
 from umap import UMAP
+import seaborn as sns
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 
@@ -42,6 +43,44 @@ def get_device():
 
     print(f"Selected device: {device}")
     return device
+
+
+# ====================
+# Create Nested Data Splits
+# ====================
+def create_nested_splits(data, split_sizes, num_sets=10, base_folder="../data/nested_splits"):
+    """
+    Create multiple sets of nested splits with shuffling and save each set in a separate folder.
+    Args:
+        data (pd.DataFrame): Input dataframe.
+        split_sizes (list): List of split ratios (e.g., [0.01, 0.1]).
+        num_sets (int): Number of shuffled split sets to create.
+        base_folder (str): Base directory to store nested splits.
+    Returns:
+        dict: Dictionary with sets of nested splits.
+    """
+    os.makedirs(base_folder, exist_ok=True)  # Ensure the base folder exists
+    all_nested_splits = {}
+
+    for set_idx in range(num_sets):
+        set_folder = os.path.join(base_folder, f"set_{set_idx + 1}")
+        os.makedirs(set_folder, exist_ok=True)  # Create folder for each set
+        
+        shuffled_data = data.sample(frac=1, random_state=None).reset_index(drop=True)  # Shuffle data
+        nested_splits = {}
+
+        for size in split_sizes:
+            sample_size = int(len(shuffled_data) * size)
+            nested_splits[f"{int(size * 100)}%"] = shuffled_data.iloc[:sample_size]
+            
+            # Save each split to the respective set folder
+            split_filename = os.path.join(set_folder, f"split_{int(size * 100)}.csv")
+            nested_splits[f"{int(size * 100)}%"].to_csv(split_filename, index=False)
+        
+        all_nested_splits[f"Set_{set_idx + 1}"] = nested_splits
+        print(f"Created Set {set_idx + 1} with nested splits.")
+    
+    return all_nested_splits
 
 
 # ====================
@@ -305,6 +344,54 @@ def get_min_max_distance(embeddings, sentences):
 # ====================
 # Plots
 # ====================
+def plot_similarity_density(embeddings, labeled_labels):
+    """
+    Plot density of cosine similarities within classes.
+
+    Args:
+        embeddings (np.array): Embeddings of the labeled dataset.
+        labeled_labels (list): Labels of the labeled dataset.
+    """
+
+    # Generate cosine similarity matrix
+    similarity_matrix = cosine_similarity(embeddings)
+
+    # Extract same-class similarities
+    blue_indices = [i for i, label in enumerate(labeled_labels) if label == 1]
+    red_indices = [i for i, label in enumerate(labeled_labels) if label == 0]
+
+    blue_to_blue = similarity_matrix[np.ix_(blue_indices, blue_indices)].flatten()
+    red_to_red = similarity_matrix[np.ix_(red_indices, red_indices)].flatten()
+
+    # Density plot
+    plt.figure(figsize=(10, 6))
+    sns.kdeplot(blue_to_blue, label="Blue-to-Blue Similarity (Label 1)", color="blue", fill=True, alpha=0.5)
+    sns.kdeplot(red_to_red, label="Red-to-Red Similarity (Label 0)", color="red", fill=True, alpha=0.5)
+    plt.title("Density Plot of Cosine Similarities within Classes")
+    plt.xlabel("Cosine Similarity")
+    plt.ylabel("Density")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+    # Quantify pointwise distance (1 - similarity)
+    blue_to_blue_distances = 1 - blue_to_blue
+    red_to_red_distances = 1 - red_to_red
+
+    # Summary statistics
+    print("Blue-to-Blue Similarities:")
+    print(f"Mean: {np.mean(blue_to_blue):.4f}, Std: {np.std(blue_to_blue):.4f}")
+
+    print("\nRed-to-Red Similarities:")
+    print(f"Mean: {np.mean(red_to_red):.4f}, Std: {np.std(red_to_red):.4f}")
+
+    print("\nBlue-to-Blue Distances:")
+    print(f"Mean: {np.mean(blue_to_blue_distances):.4f}, Std: {np.std(blue_to_blue_distances):.4f}")
+
+    print("\nRed-to-Red Distances:")
+    print(f"Mean: {np.mean(red_to_red_distances):.4f}, Std: {np.std(red_to_red_distances):.4f}")
+
+
 def visualize_embeddings(embeddings, labels=None, title="Embedding Visualization", method="tsne"):
     """
     Visualize sentence embeddings using t-SNE or UMAP.
