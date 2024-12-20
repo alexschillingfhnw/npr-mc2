@@ -1,10 +1,11 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support, accuracy_score
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.neighbors import NearestNeighbors
 from collections import Counter
-import numpy as np
 
-
+# Functions for weak labeling techniques
 def majority_vote(similarity_matrix, labels_labeled, k=5):
     """
     Assign weak labels using majority vote among top-k most similar sentences.
@@ -12,10 +13,10 @@ def majority_vote(similarity_matrix, labels_labeled, k=5):
     weak_labels = []
     for similarities in similarity_matrix:
         top_k_indices = np.argsort(similarities)[-k:]
-        top_k_labels = [labels_labeled[idx] for idx in top_k_indices]
+        top_k_labels = labels_labeled[top_k_indices]
         label_counts = Counter(top_k_labels)
         weak_labels.append(label_counts.most_common(1)[0][0])
-    return weak_labels
+    return np.array(weak_labels)
 
 
 def weighted_vote(similarity_matrix, labels_labeled, k=5):
@@ -25,13 +26,14 @@ def weighted_vote(similarity_matrix, labels_labeled, k=5):
     weak_labels = []
     for similarities in similarity_matrix:
         top_k_indices = np.argsort(similarities)[-k:]
-        weights = similarities[top_k_indices]
-        top_k_labels = [labels_labeled[idx] for idx in top_k_indices]
+        top_k_labels = labels_labeled[top_k_indices]
+        top_k_weights = similarities[top_k_indices]
+        
         weighted_counts = Counter()
-        for label, weight in zip(top_k_labels, weights):
+        for label, weight in zip(top_k_labels, top_k_weights):
             weighted_counts[label] += weight
         weak_labels.append(weighted_counts.most_common(1)[0][0])
-    return weak_labels
+    return np.array(weak_labels)
 
 
 def centroid_based_labeling(embeddings_unlabeled, centroids):
@@ -42,38 +44,23 @@ def centroid_based_labeling(embeddings_unlabeled, centroids):
     for embedding in embeddings_unlabeled:
         distances = [np.linalg.norm(embedding - centroid) for centroid in centroids]
         weak_labels.append(np.argmin(distances))  # Label corresponds to closest centroid
-    return weak_labels
+    return np.array(weak_labels)
 
 
 def compute_class_centroids(embeddings_labeled, labels_labeled):
     """
     Compute centroids for each class in the embedding space.
     """
-    unique_labels = set(labels_labeled)
+    unique_labels = np.unique(labels_labeled)
     centroids = []
     for label in unique_labels:
-        class_embeddings = embeddings_labeled[np.array(labels_labeled) == label]
-        centroid = np.mean(class_embeddings, axis=0)
+        class_embeddings = embeddings_labeled[labels_labeled == label]
+        centroid = np.median(class_embeddings, axis=0)
         centroids.append(centroid)
     return centroids
 
 
-def approximate_nearest_neighbors(embeddings_labeled, embeddings_unlabeled, k=5):
-    """
-    Approximate nearest neighbor search using LSH or KDTree.
-    """
-    # Fit Nearest Neighbors model
-    nn_model = NearestNeighbors(n_neighbors=k, algorithm="auto").fit(embeddings_labeled)
-    
-    # Find top-k neighbors for each unlabeled embedding
-    distances, indices = nn_model.kneighbors(embeddings_unlabeled)
-    
-    return distances, indices
-
-
-def evaluate_and_compare_techniques(
-    embeddings_labeled, labels_labeled, validation_labels, embeddings_validation, k=5
-):
+def evaluate_and_compare_techniques(embeddings_labeled, labels_labeled, validation_labels, embeddings_validation, k=5):
     """
     Apply and evaluate multiple weak labeling techniques using the validation set with ground truth.
     """
@@ -105,9 +92,7 @@ def evaluate_and_compare_techniques(
     return results, techniques
 
 
-def apply_best_technique_to_test(
-    embeddings_labeled, labels_labeled, embeddings_test, best_technique, k=5
-):
+def apply_best_technique_to_test(embeddings_labeled, labels_labeled, embeddings_test, best_technique, k=5):
     """
     Apply the best weak labeling technique to the test set.
     """
@@ -122,3 +107,38 @@ def apply_best_technique_to_test(
         return centroid_based_labeling(embeddings_test, centroids)
     else:
         raise ValueError(f"Unknown technique: {best_technique}")
+
+
+def weighted_vote_with_confidence(similarity_matrix, labels_labeled, k=5):
+    """
+    Perform weighted voting and return both the predicted labels and a confidence score.
+    Confidence is defined as the margin between the top label's total similarity and the second top label.
+    """
+    weak_labels = []
+    confidences = []
+    
+    for similarities in similarity_matrix:
+        top_k_indices = np.argsort(similarities)[-k:]
+        top_k_labels = labels_labeled[top_k_indices]
+        top_k_weights = similarities[top_k_indices]
+
+        # Aggregate weights by label
+        weighted_counts = Counter()
+        for label, weight in zip(top_k_labels, top_k_weights):
+            weighted_counts[label] += weight
+        
+        # Sort labels by total weight
+        label_weights = weighted_counts.most_common()
+        predicted_label = label_weights[0][0]
+        
+        # Confidence: difference between top label and second label weights
+        if len(label_weights) > 1:
+            confidence = label_weights[0][1] - label_weights[1][1]
+        else:
+            # If only one label present (rare if k>1), confidence is just the total weight
+            confidence = label_weights[0][1]
+
+        weak_labels.append(predicted_label)
+        confidences.append(confidence)
+
+    return np.array(weak_labels), np.array(confidences)
