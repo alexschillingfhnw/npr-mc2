@@ -459,7 +459,7 @@ def plot_metrics(metrics_df, x_col="split_size", y_cols=None, title="Model Quali
     plt.title(title)
     plt.xlabel("Training Data Split Size")
     plt.ylabel("Metric Value")
-    plt.ylim(0.7, 1)  # Metrics are typically scaled between 0 and 1
+    #plt.ylim(0, 1)  # Metrics are typically scaled between 0 and 1
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -509,4 +509,53 @@ def plot_metrics_with_confidence(metrics_df, x_col="split_size", y_cols=None, ti
     plt.xticks(metrics_df[x_col].unique())
     plt.legend()
     plt.grid(True, alpha=0.3)
+    plt.show()
+
+
+def plot_predictions_distribution(techniques_predictions):
+    techniques = list(techniques_predictions.keys())
+    predictions = list(techniques_predictions.values())
+
+    # Assuming binary classification with labels 0 and 1
+    # Count how many 0s and 1s each technique predicted
+    counts = []
+    for preds in predictions:
+        unique, counts_ = np.unique(preds, return_counts=True)
+        label_count = dict(zip(unique, counts_))
+        # Ensure we have both 0 and 1 keys, set to 0 if missing
+        label_count_0 = label_count.get(0, 0)
+        label_count_1 = label_count.get(1, 0)
+        counts.append((label_count_0, label_count_1))
+
+    # Separate the counts for plotting
+    counts_0 = [c[0] for c in counts]
+    counts_1 = [c[1] for c in counts]
+
+    x = np.arange(len(techniques))
+    width = 0.35
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    rects0 = ax.bar(x - width/2, counts_0, width, label='Label 0')
+    rects1 = ax.bar(x + width/2, counts_1, width, label='Label 1')
+
+    ax.set_ylabel('Count of Predicted Labels')
+    ax.set_title('Predicted Label Distribution by Weak Labelling Technique')
+    ax.set_xticks(x)
+    ax.set_xticklabels(techniques, rotation=45, ha='right')
+    ax.legend()
+
+    # Optionally, add labels above the bars
+    def autolabel(rects):
+        for rect in rects:
+            height = rect.get_height()
+            ax.annotate('{}'.format(height),
+                        xy=(rect.get_x() + rect.get_width()/2, height),
+                        xytext=(0, 3), 
+                        textcoords="offset points",
+                        ha='center', va='bottom')
+
+    autolabel(rects0)
+    autolabel(rects1)
+
+    plt.tight_layout()
     plt.show()
