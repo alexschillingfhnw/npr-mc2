@@ -375,6 +375,66 @@ def visualize_embeddings(embeddings, labels=None, title="Embedding Visualization
     plt.show()
 
 
+def visualize_embeddings_with_params(embeddings, labels=None, title="Embedding Visualization", method="tsne", tsne_params=None, ax=None):
+    """
+    Visualize sentence embeddings using t-SNE or UMAP with configurable hyperparameters.
+
+    Args:
+        embeddings (np.ndarray): Sentence embeddings.
+        labels (list or np.ndarray): Optional labels for coloring the points.
+        title (str): Title of the plot.
+        method (str): Dimensionality reduction method, either 'tsne' or 'umap'.
+        tsne_params (dict): Optional dictionary of hyperparameters for t-SNE.
+                            E.g., {'perplexity': 30, 'learning_rate': 200, 'n_iter': 1000}
+        ax (matplotlib.axes.Axes): Optional Axes object for the subplot.
+    """
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    # Set default t-SNE parameters if not provided
+    if tsne_params is None:
+        tsne_params = {'perplexity': 30, 'learning_rate': 200, 'n_iter': 250, 'early_exaggeration': 12}
+
+    # Reduce dimensionality
+    print(f"Reducing dimensionality with {method.upper()}...")
+    if method.lower() == "tsne":
+        reducer = TSNE(n_components=2, random_state=42, **tsne_params)
+    elif method.lower() == "umap":
+        reducer = UMAP(n_components=2, random_state=42)
+    else:
+        raise ValueError("Invalid method. Choose 'tsne' or 'umap'.")
+    
+    reduced_embeddings = reducer.fit_transform(embeddings)
+
+    # Plotting
+    if ax is None:
+        ax = plt.gca()
+
+    ax.set_title(title)
+    
+    if labels is not None:
+        # Define harmonious colors
+        unique_labels = np.unique(labels)
+        colors = ['#2E86AB', '#FF6F61', '#6CC644']  # Blue, Coral, and Green
+
+        for i, label in enumerate(unique_labels):
+            indices = np.where(labels == label)[0]
+            ax.scatter(
+                reduced_embeddings[indices, 0],
+                reduced_embeddings[indices, 1],
+                label=f"Label {label}",
+                color=colors[i % len(colors)],
+                alpha=0.4,
+            )
+
+        ax.legend(title="Labels", loc="best")
+    else:
+        ax.scatter(reduced_embeddings[:, 0], reduced_embeddings[:, 1], alpha=0.4)
+
+    ax.set_xlabel(f"{method.upper()} Dimension 1")
+    ax.set_ylabel(f"{method.upper()} Dimension 2")
+    ax.grid(True)
+
+
 def plot_metrics(metrics_df, x_col="split_size", y_cols=None, title="Model Quality by Training Data Size"):
     """
     Plot specified metrics against training data split size.
